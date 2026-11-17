@@ -1,0 +1,72 @@
+node('linux-agent') {
+    def appName = 'assignment-4-scripted-app'
+    def appVersion = '2.0.0'
+    def targetEnv = 'staging'
+    def runTests = true
+    def simulateFailure = false
+
+    try {
+        stage('Checkout') {
+            echo "Running Scripted Pipeline on node: ${env.NODE_NAME}"
+            checkout scm
+            sh 'git log -1 --oneline || true'
+        }
+
+        stage('Build') {
+            echo "Building ${appName} v${appVersion}..."
+            sh """
+                mkdir -p build_output
+                echo "Package: ${appName} | Version: ${appVersion} | Env: ${targetEnv}" > build_output/release.txt
+                cat build_output/release.txt
+            """
+        }
+
+        stage('Test & Validation') {
+            if (runTests) {
+                echo "Test flag is TRUE -> Executing verification checks..."
+                sh 'test -f build_output/release.txt'
+                sh "grep -q '${appVersion}' build_output/release.txt"
+                echo "Verification checks passed."
+            } else {
+                echo "Test flag is FALSE -> Skipping test suite."
+            }
+
+            if (simulateFailure) {
+                error("Simulated build error triggered for Assignment 4 error-handling test!")
+            }
+        }
+
+        stage('Deploy') {
+            if (targetEnv == 'prod') {
+                echo "Production deployment requested -> Executing strict production rollout..."
+                sh """
+                    mkdir -p /home/jenkins-agent/scripted-deploy/prod
+                    cp build_output/release.txt /home/jenkins-agent/scripted-deploy/prod/
+                """
+            } else if (targetEnv == 'staging') {
+                echo "Staging deployment requested -> Deploying to staging folder..."
+                sh """
+                    mkdir -p /home/jenkins-agent/scripted-deploy/staging
+                    cp build_output/release.txt /home/jenkins-agent/scripted-deploy/staging/
+                    ls -l /home/jenkins-agent/scripted-deploy/staging/
+                """
+            } else {
+                echo "Local dev environment -> Skipping remote deployment."
+            }
+        }
+
+        currentBuild.result = 'SUCCESS'
+
+    } catch (Exception err) {
+        currentBuild.result = 'FAILURE'
+        echo "ERROR CAUGHT IN SCRIPTED PIPELINE: ${err.getMessage()}"
+        echo "Triggering rollback / alert notification for ${appName}..."
+        throw err
+
+    } finally {
+        stage('Cleanup') {
+            echo "Executing finally block: archiving artifacts and cleaning workspace..."
+            archiveArtifacts artifacts: 'build_output/**', allowEmptyArchive: true
+        }
+    }
+}
