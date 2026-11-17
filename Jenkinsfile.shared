@@ -1,0 +1,31 @@
+@Library('my-shared-library') _
+
+pipeline {
+    agent {
+        label 'linux-agent'
+    }
+
+    stages {
+        stage('Initialize') {
+            steps {
+                notifyBuild('assignment-5-app', 'staging', 'STARTED')
+            }
+        }
+
+        stage('Build & Verify') {
+            steps {
+                echo "Running application build steps on ${NODE_NAME}..."
+                sh 'echo "Artifact built at $(date)" > app.jar && ls -lh app.jar'
+            }
+        }
+    }
+
+    post {
+        success {
+            notifyBuild('assignment-5-app', 'staging', 'SUCCESS')
+        }
+        failure {
+            notifyBuild('assignment-5-app', 'staging', 'FAILED')
+        }
+    }
+}
